@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { broadcastUpdate } from '../../events/route'
+import { broadcastUpdate } from '@/lib/sse-utils'
 
 export async function DELETE(
   request: NextRequest,

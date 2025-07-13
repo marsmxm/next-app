@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server'
-
-// Store active connections
-const connections = new Set<ReadableStreamDefaultController>()
+import { connections } from '@/lib/sse-utils'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -52,19 +50,5 @@ export async function GET(request: NextRequest) {
       'Access-Control-Allow-Methods': 'GET',
       'Access-Control-Allow-Headers': 'Cache-Control',
     },
-  })
-}
-
-// Function to broadcast updates to all connected clients
-export function broadcastUpdate(data: any) {
-  const message = JSON.stringify({ type: 'update', data, timestamp: new Date().toISOString() })
-  
-  connections.forEach((controller) => {
-    try {
-      controller.enqueue(`data: ${message}\n\n`)
-    } catch (error) {
-      // Remove failed connections
-      connections.delete(controller)
-    }
   })
 }
