@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, SetStateAction } from 'react'
 
 // Types
 interface Partner {
@@ -40,6 +40,7 @@ export default function Home() {
   const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(false)
+  const [scheduleLoading, setScheduleLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string>('')
 
   // Time slots: 9:00-17:00, every 15 minutes
@@ -82,6 +83,13 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const changeDate = async (e: { target: { value: SetStateAction<string> } }) => {
+    setSelectedDate(e.target.value)
+    setScheduleLoading(true)
+    await fetchData()
+    setScheduleLoading(false)
   }
 
   const toggleAvailableSlot = async (partnerId: string, startTime: string) => {
@@ -163,15 +171,15 @@ export default function Home() {
   }
 
   const getSlotStatus = (partnerId: string, startTime: string) => {
-    const appointment = appointments.find(a => 
+    const appointment = appointments.find(a =>
       a.partnerId === partnerId && a.startTime === startTime
     )
-    
+
     if (appointment) {
       return { type: 'booked', appointment }
     }
 
-    const availableSlot = availableSlots.find(s => 
+    const availableSlot = availableSlots.find(s =>
       s.partnerId === partnerId && s.startTime === startTime
     )
 
@@ -188,17 +196,17 @@ export default function Home() {
     } else {
       const status = getSlotStatus(partnerId, startTime)
       if (status.type !== 'available') return false
-      
+
       // Check if entrepreneur already has appointment at this time
-      const hasConflict = appointments.some(a => 
+      const hasConflict = appointments.some(a =>
         a.entrepreneurId === selectedUserId && a.startTime === startTime
       )
-      
+
       // Check if entrepreneur already has appointment with this partner today
-      const hasPartnerConflict = appointments.some(a => 
+      const hasPartnerConflict = appointments.some(a =>
         a.entrepreneurId === selectedUserId && a.partnerId === partnerId
       )
-      
+
       return !hasConflict && !hasPartnerConflict
     }
   }
@@ -253,7 +261,7 @@ export default function Home() {
             </label>
             <select
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={changeDate}
               className="w-full p-2 border border-gray-300 rounded-md"
             >
               {availableDates.map((date) => (
@@ -271,163 +279,170 @@ export default function Home() {
       </div>
 
       {/* Schedule Table */}
-      {selectedUserId && (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="px-6 py-4 bg-gray-50 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {new Date(selectedDate).toLocaleDateString('zh-CN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'long'
-              })} - 会面安排
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {currentRole === 'partner' 
-                ? '点击时间段设置可用时间' 
-                : '点击绿色时间段进行预约'
-              }
-            </p>
-          </div>
+      {scheduleLoading ? (
+        <div className="text-center">加载中...</div>
+      ) : (
+        <>
+          {selectedUserId && (
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="px-6 py-4 bg-gray-50 border-b">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {new Date(selectedDate).toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    weekday: 'long'
+                  })} - 会面安排
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {currentRole === 'partner'
+                    ? '点击时间段设置可用时间'
+                    : '点击绿色时间段进行预约'
+                  }
+                </p>
+              </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    时间
-                  </th>
-                  {partners.map((partner) => (
-                    <th key={partner.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {partner.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {timeSlots.map((time) => (
-                  <tr key={time} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {time}
-                    </td>
-                    {partners.map((partner) => {
-                      const status = getSlotStatus(partner.id, time)
-                      const canAct = canUserActOnSlot(partner.id, time)
-                      const isLoading = actionLoading === `${partner.id}-${time}`
-                      
-                      return (
-                        <td key={partner.id} className="px-6 py-4 whitespace-nowrap">
-                          {status.type === 'booked' && (
-                            (currentRole === 'partner' && selectedUserId === partner.id) ||
-                            (currentRole === 'entrepreneur' && selectedUserId === status.appointment?.entrepreneurId)
-                          ) ? (
-                            // When booked and user can cancel, use div container to avoid nested buttons
-                            <div
-                              className={`
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        时间
+                      </th>
+                      {partners.map((partner) => (
+                        <th key={partner.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {partner.name}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {timeSlots.map((time) => (
+                      <tr key={time} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {time}
+                        </td>
+                        {partners.map((partner) => {
+                          const status = getSlotStatus(partner.id, time)
+                          const canAct = canUserActOnSlot(partner.id, time)
+                          const isLoading = actionLoading === `${partner.id}-${time}`
+
+                          return (
+                            <td key={partner.id} className="px-6 py-4 whitespace-nowrap">
+                              {status.type === 'booked' && (
+                                (currentRole === 'partner' && selectedUserId === partner.id) ||
+                                (currentRole === 'entrepreneur' && selectedUserId === status.appointment?.entrepreneurId)
+                              ) ? (
+                                // When booked and user can cancel, use div container to avoid nested buttons
+                                <div
+                                  className={`
                                 w-full px-3 py-2 rounded text-sm font-medium transition-colors relative
                                 bg-blue-100 text-blue-800 cursor-default
                                 ${isLoading ? 'opacity-50' : ''}
                               `}
-                            >
-                              {isLoading ? (
-                                <div className="flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
-                                </div>
-                              ) : (
-                                <div className="text-center">
-                                  <div>已预约</div>
-                                  <div className="text-xs">
-                                    {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
-                                  </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      cancelAppointment(status.appointment!.id)
-                                    }}
-                                    disabled={actionLoading === `cancel-${status.appointment!.id}`}
-                                    className="mt-1 text-xs underline hover:text-red-900 disabled:opacity-50"
-                                  >
-                                    {actionLoading === `cancel-${status.appointment!.id}` ? (
-                                      <div className="flex items-center justify-center">
-                                        <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent"></div>
+                                >
+                                  {isLoading ? (
+                                    <div className="flex items-center justify-center">
+                                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center">
+                                      <div>已预约</div>
+                                      <div className="text-xs">
+                                        {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
                                       </div>
-                                    ) : (
-                                      '取消'
-                                    )}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            // For all other cases, use button
-                            <button
-                              onClick={() => {
-                                if (currentRole === 'partner') {
-                                  toggleAvailableSlot(partner.id, time)
-                                } else if (status.type === 'available' && canAct) {
-                                  bookAppointment(partner.id, time)
-                                }
-                              }}
-                              disabled={(!canAct && currentRole === 'entrepreneur') || isLoading}
-                              className={`
-                                w-full px-3 py-2 rounded text-sm font-medium transition-colors relative
-                                ${status.type === 'booked' 
-                                  ? 'bg-blue-100 text-blue-800 cursor-default' 
-                                  : status.type === 'available'
-                                    ? canAct 
-                                      ? 'bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer'
-                                      : 'bg-green-50 text-green-600 cursor-not-allowed'
-                                    : currentRole === 'partner' && selectedUserId === partner.id
-                                      ? 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-800 cursor-pointer'
-                                      : 'bg-gray-50 text-gray-400 cursor-default'
-                                }
-                                ${isLoading ? 'opacity-50' : ''}
-                              `}
-                            >
-                              {isLoading ? (
-                                <div className="flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
-                                </div>
-                              ) : status.type === 'booked' ? (
-                                <div className="text-center">
-                                  <div>已预约</div>
-                                  <div className="text-xs">
-                                    {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
-                                  </div>
-                                </div>
-                              ) : status.type === 'available' ? (
-                                <div className="text-center">
-                                  空闲
-                                  {!canAct && currentRole === 'entrepreneur' && (
-                                    <div className="text-xs mt-1">
-                                      {appointments.some(a => a.entrepreneurId === selectedUserId && a.startTime === time)
-                                        ? '时间冲突'
-                                        : '今日已约'
-                                      }
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          cancelAppointment(status.appointment!.id)
+                                        }}
+                                        disabled={actionLoading === `cancel-${status.appointment!.id}`}
+                                        className="mt-1 text-xs underline hover:text-red-900 disabled:opacity-50"
+                                      >
+                                        {actionLoading === `cancel-${status.appointment!.id}` ? (
+                                          <div className="flex items-center justify-center">
+                                            <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent"></div>
+                                          </div>
+                                        ) : (
+                                          '取消'
+                                        )}
+                                      </button>
                                     </div>
                                   )}
                                 </div>
                               ) : (
-                                '不可用'
+                                // For all other cases, use button
+                                <button
+                                  onClick={() => {
+                                    if (currentRole === 'partner') {
+                                      toggleAvailableSlot(partner.id, time)
+                                    } else if (status.type === 'available' && canAct) {
+                                      bookAppointment(partner.id, time)
+                                    }
+                                  }}
+                                  disabled={(!canAct && currentRole === 'entrepreneur') || isLoading}
+                                  className={`
+                                w-full px-3 py-2 rounded text-sm font-medium transition-colors relative
+                                ${status.type === 'booked'
+                                      ? 'bg-blue-100 text-blue-800 cursor-default'
+                                      : status.type === 'available'
+                                        ? canAct
+                                          ? 'bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer'
+                                          : 'bg-green-50 text-green-600 cursor-not-allowed'
+                                        : currentRole === 'partner' && selectedUserId === partner.id
+                                          ? 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-800 cursor-pointer'
+                                          : 'bg-gray-50 text-gray-400 cursor-default'
+                                    }
+                                ${isLoading ? 'opacity-50' : ''}
+                              `}
+                                >
+                                  {isLoading ? (
+                                    <div className="flex items-center justify-center">
+                                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                                    </div>
+                                  ) : status.type === 'booked' ? (
+                                    <div className="text-center">
+                                      <div>已预约</div>
+                                      <div className="text-xs">
+                                        {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
+                                      </div>
+                                    </div>
+                                  ) : status.type === 'available' ? (
+                                    <div className="text-center">
+                                      空闲
+                                      {!canAct && currentRole === 'entrepreneur' && (
+                                        <div className="text-xs mt-1">
+                                          {appointments.some(a => a.entrepreneurId === selectedUserId && a.startTime === time)
+                                            ? '时间冲突'
+                                            : '今日已约'
+                                          }
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    '不可用'
+                                  )}
+                                </button>
                               )}
-                            </button>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!selectedUserId && (
+            <div className="text-center text-gray-500 py-12">
+              请先选择用户身份来查看和管理会面安排
+            </div>
+          )}
+        </>
       )}
 
-      {!selectedUserId && (
-        <div className="text-center text-gray-500 py-12">
-          请先选择用户身份来查看和管理会面安排
-        </div>
-      )}
     </div>
   )
 }
