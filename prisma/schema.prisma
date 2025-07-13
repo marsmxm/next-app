@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Partner {
+  id          String    @id @default(cuid())
+  name        String
+  appointments Appointment[]
+  availableSlots AvailableSlot[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("partners")
+}
+
+model Entrepreneur {
+  id          String    @id @default(cuid())
+  name        String
+  appointments Appointment[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("entrepreneurs")
+}
+
+model AvailableSlot {
+  id          String    @id @default(cuid())
+  partnerId   String
+  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  date        DateTime  // Date only (will store as start of day)
+  startTime   String    // Format: "09:00", "09:15", etc.
+  isBooked    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([partnerId, date, startTime])
+  @@map("available_slots")
+}
+
+model Appointment {
+  id              String      @id @default(cuid())
+  partnerId       String
+  partner         Partner     @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  entrepreneurId  String
+  entrepreneur    Entrepreneur @relation(fields: [entrepreneurId], references: [id], onDelete: Cascade)
+  date            DateTime    // Date only (will store as start of day)
+  startTime       String      // Format: "09:00", "09:15", etc.
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([partnerId, date, startTime])
+  @@unique([entrepreneurId, date, startTime])
+  @@unique([entrepreneurId, partnerId, date]) // One meeting per day between same pair
+  @@map("appointments")
+}
