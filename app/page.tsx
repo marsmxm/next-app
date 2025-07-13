@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useTransition, SetStateAction } from 'react'
+import { useState, useEffect, SetStateAction } from 'react'
+import { useSSE } from '@/lib/useSSE'
 
 // Types
 interface Partner {
@@ -39,9 +40,10 @@ export default function Home() {
   const [entrepreneurs, setEntrepreneurs] = useState<Entrepreneur[]>([])
   const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(false)
   const [scheduleLoading, setScheduleLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string>('')
+  const [isConnected, setIsConnected] = useState(false)
 
   // Time slots: 9:00-17:00, every 15 minutes
   const timeSlots = []
@@ -60,12 +62,36 @@ export default function Home() {
     availableDates.push(date.toISOString().split('T')[0])
   }
 
+  const { close } = useSSE(`/api/events?date=${selectedDate}`, {
+    enabled: !!selectedDate,
+    onMessage: (data) => {
+      if (data.type === 'update') {
+        // Check if the update is for the current date
+        if (data.data.date === selectedDate) {
+          // Refetch data when there's an update
+          fetchData()
+        }
+      } else if (data.type === 'connected') {
+        setIsConnected(true)
+      }
+    },
+    onError: (error) => {
+      console.error('SSE connection error:', error)
+      setIsConnected(false)
+    },
+    onOpen: () => {
+      console.log('SSE connection established')
+      setIsConnected(true)
+    }
+  })
+
+  // Clean up SSE connection when date changes
   useEffect(() => {
-    fetchData()
+    setIsConnected(false)
   }, [selectedDate])
 
   const fetchData = async () => {
-    setLoading(true)
+    setFetching(true)
     try {
       const [partnersRes, entrepreneursRes, slotsRes, appointmentsRes] = await Promise.all([
         fetch('/api/partners'),
@@ -81,7 +107,7 @@ export default function Home() {
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
-      setLoading(false)
+      setFetching(false)
     }
   }
 
@@ -110,9 +136,10 @@ export default function Home() {
         })
       })
 
-      if (response.ok) {
-        await fetchData()
+      if (!response.ok) {
+        console.error('Failed to toggle slot')
       }
+      // SSE will handle the data refresh automatically
     } catch (error) {
       console.error('Error toggling slot:', error)
     } finally {
@@ -138,12 +165,11 @@ export default function Home() {
         })
       })
 
-      if (response.ok) {
-        await fetchData()
-      } else {
+      if (!response.ok) {
         const error = await response.text()
         alert(`预约失败: ${error}`)
       }
+      // SSE will handle the data refresh automatically
     } catch (error) {
       console.error('Error booking appointment:', error)
       alert('预约失败，请重试')
@@ -160,9 +186,10 @@ export default function Home() {
         method: 'DELETE'
       })
 
-      if (response.ok) {
-        await fetchData()
+      if (!response.ok) {
+        console.error('Failed to cancel appointment')
       }
+      // SSE will handle the data refresh automatically
     } catch (error) {
       console.error('Error canceling appointment:', error)
     } finally {
@@ -211,7 +238,7 @@ export default function Home() {
     }
   }
 
-  if (loading && !partners.length) {
+  if (fetching && !partners.length) {
     return <div className="text-center">加载中...</div>
   }
 
@@ -286,20 +313,30 @@ export default function Home() {
           {selectedUserId && (
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="px-6 py-4 bg-gray-50 border-b">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {new Date(selectedDate).toLocaleDateString('zh-CN', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    weekday: 'long'
-                  })} - 会面安排
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  {currentRole === 'partner'
-                    ? '点击时间段设置可用时间'
-                    : '点击绿色时间段进行预约'
-                  }
-                </p>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {new Date(selectedDate).toLocaleDateString('zh-CN', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        weekday: 'long'
+                      })} - 会面安排
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {currentRole === 'partner'
+                        ? '点击时间段设置可用时间'
+                        : '点击绿色时间段进行预约'
+                      }
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className="text-xs text-gray-500">
+                      {isConnected ? '实时同步' : '连接中断'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="overflow-x-auto">

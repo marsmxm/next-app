@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { broadcastUpdate } from '../events/route'
 
 export async function GET(request: NextRequest) {
   try {
@@ -114,6 +115,13 @@ export async function POST(request: NextRequest) {
         partner: true,
         entrepreneur: true
       }
+    })
+
+    // Broadcast the update to all connected clients
+    broadcastUpdate({
+      type: 'appointment_created',
+      appointment,
+      date: date
     })
 
     return NextResponse.json(appointment, { status: 201 })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { broadcastUpdate } from '../events/route'
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,14 +59,31 @@ export async function POST(request: NextRequest) {
         await prisma.availableSlot.delete({
           where: { id: existingSlot.id }
         })
+        
+        // Broadcast the update
+        broadcastUpdate({
+          type: 'slot_deleted',
+          slot: existingSlot,
+          date: date
+        })
       } else {
         // Create new slot
-        await prisma.availableSlot.create({
+        const newSlot = await prisma.availableSlot.create({
           data: {
             partnerId,
             date: startOfDay,
             startTime
+          },
+          include: {
+            partner: true
           }
+        })
+        
+        // Broadcast the update
+        broadcastUpdate({
+          type: 'slot_created',
+          slot: newSlot,
+          date: date
         })
       }
     }

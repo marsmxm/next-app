@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { broadcastUpdate } from '../../events/route'
 
 export async function DELETE(
   request: NextRequest,
@@ -12,8 +13,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Appointment ID is required' }, { status: 400 })
     }
 
+    // Get the appointment details before deleting for broadcasting
+    const appointment = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        partner: true,
+        entrepreneur: true
+      }
+    })
+
+    if (!appointment) {
+      return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
+    }
+
     await prisma.appointment.delete({
       where: { id }
+    })
+
+    // Broadcast the update to all connected clients
+    broadcastUpdate({
+      type: 'appointment_deleted',
+      appointment,
+      date: appointment.date.toISOString().split('T')[0]
     })
 
     return NextResponse.json({ success: true })
