@@ -324,7 +324,7 @@ export default function Home() {
                     <p className="text-sm text-gray-600 mt-1">
                       {currentRole === 'partner'
                         ? '点击时间段设置可用时间'
-                        : '点击绿色时间段进行预约'
+                        : '点击空闲时间段进行预约'
                       }
                     </p>
                   </div>

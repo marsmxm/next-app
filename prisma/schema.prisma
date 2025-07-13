@@ -38,7 +38,6 @@ model AvailableSlot {
   partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   date        DateTime  // Date only (will store as start of day)
   startTime   String    // Format: "09:00", "09:15", etc.
-  isBooked    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
