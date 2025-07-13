@@ -87,6 +87,7 @@ export default function Home() {
 
   // Clean up SSE connection when date changes
   useEffect(() => {
+    fetchData()
     setIsConnected(false)
   }, [selectedDate])
 
@@ -113,9 +114,6 @@ export default function Home() {
 
   const changeDate = async (e: { target: { value: SetStateAction<string> } }) => {
     setSelectedDate(e.target.value)
-    setScheduleLoading(true)
-    await fetchData()
-    setScheduleLoading(false)
   }
 
   const toggleAvailableSlot = async (partnerId: string, startTime: string) => {
@@ -333,7 +331,7 @@ export default function Home() {
                   <div className="flex items-center space-x-2">
                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
                     <span className="text-xs text-gray-500">
-                      {isConnected ? '实时同步' : '连接中断'}
+                      {isConnected ? 'connected' : 'disconnected'}
                     </span>
                   </div>
                 </div>

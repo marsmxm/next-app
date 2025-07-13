@@ -30,11 +30,14 @@ export async function DELETE(
       where: { id }
     })
 
+    const date = appointment.date;
+    date.setHours(date.getHours() + 8)
+
     // Broadcast the update to all connected clients
     broadcastUpdate({
       type: 'appointment_deleted',
       appointment,
-      date: appointment.date.toISOString().split('T')[0]
+      date: date.toISOString().split('T')[0]
     })
 
     return NextResponse.json({ success: true })
