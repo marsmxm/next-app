@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 
 // Types
 interface Partner {
@@ -31,8 +31,8 @@ interface Appointment {
   entrepreneur?: Entrepreneur
 }
 
-export default function AppointmentSystem() {
-  const [currentUser, setCurrentUser] = useState<'partner' | 'entrepreneur'>('partner')
+export default function Home() {
+  const [currentRole, setCurrentRole] = useState<'partner' | 'entrepreneur'>('partner')
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [partners, setPartners] = useState<Partner[]>([])
@@ -85,7 +85,7 @@ export default function AppointmentSystem() {
   }
 
   const toggleAvailableSlot = async (partnerId: string, startTime: string) => {
-    if (currentUser !== 'partner' || selectedUserId !== partnerId) return
+    if (currentRole !== 'partner' || selectedUserId !== partnerId) return
 
     const loadingKey = `${partnerId}-${startTime}`
     setActionLoading(loadingKey)
@@ -103,7 +103,7 @@ export default function AppointmentSystem() {
       })
 
       if (response.ok) {
-        fetchData()
+        await fetchData()
       }
     } catch (error) {
       console.error('Error toggling slot:', error)
@@ -113,7 +113,7 @@ export default function AppointmentSystem() {
   }
 
   const bookAppointment = async (partnerId: string, startTime: string) => {
-    if (currentUser !== 'entrepreneur' || !selectedUserId) return
+    if (currentRole !== 'entrepreneur' || !selectedUserId) return
 
     const loadingKey = `${partnerId}-${startTime}`
     setActionLoading(loadingKey)
@@ -131,7 +131,7 @@ export default function AppointmentSystem() {
       })
 
       if (response.ok) {
-        fetchData()
+        await fetchData()
       } else {
         const error = await response.text()
         alert(`预约失败: ${error}`)
@@ -153,7 +153,7 @@ export default function AppointmentSystem() {
       })
 
       if (response.ok) {
-        fetchData()
+        await fetchData()
       }
     } catch (error) {
       console.error('Error canceling appointment:', error)
@@ -183,7 +183,7 @@ export default function AppointmentSystem() {
   }
 
   const canUserActOnSlot = (partnerId: string, startTime: string) => {
-    if (currentUser === 'partner') {
+    if (currentRole === 'partner') {
       return selectedUserId === partnerId
     } else {
       const status = getSlotStatus(partnerId, startTime)
@@ -217,9 +217,9 @@ export default function AppointmentSystem() {
               用户类型
             </label>
             <select
-              value={currentUser}
+              value={currentRole}
               onChange={(e) => {
-                setCurrentUser(e.target.value as 'partner' | 'entrepreneur')
+                setCurrentRole(e.target.value as 'partner' | 'entrepreneur')
                 setSelectedUserId('')
               }}
               className="w-full p-2 border border-gray-300 rounded-md"
@@ -231,7 +231,7 @@ export default function AppointmentSystem() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              选择{currentUser === 'partner' ? '合伙人' : '创业者'}
+              选择{currentRole === 'partner' ? '合伙人' : '创业者'}
             </label>
             <select
               value={selectedUserId}
@@ -239,7 +239,7 @@ export default function AppointmentSystem() {
               className="w-full p-2 border border-gray-300 rounded-md"
             >
               <option value="">请选择...</option>
-              {(currentUser === 'partner' ? partners : entrepreneurs).map((user) => (
+              {(currentRole === 'partner' ? partners : entrepreneurs).map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
@@ -283,7 +283,7 @@ export default function AppointmentSystem() {
               })} - 会面安排
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              {currentUser === 'partner' 
+              {currentRole === 'partner' 
                 ? '点击时间段设置可用时间' 
                 : '点击绿色时间段进行预约'
               }
@@ -317,42 +317,28 @@ export default function AppointmentSystem() {
                       
                       return (
                         <td key={partner.id} className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => {
-                              if (currentUser === 'partner') {
-                                toggleAvailableSlot(partner.id, time)
-                              } else if (status.type === 'available' && canAct) {
-                                bookAppointment(partner.id, time)
-                              }
-                            }}
-                            disabled={(!canAct && currentUser === 'entrepreneur') || isLoading}
-                            className={`
-                              w-full px-3 py-2 rounded text-sm font-medium transition-colors relative
-                              ${status.type === 'booked' 
-                                ? 'bg-red-100 text-red-800 cursor-default' 
-                                : status.type === 'available'
-                                  ? canAct 
-                                    ? 'bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer'
-                                    : 'bg-green-50 text-green-600 cursor-not-allowed'
-                                  : currentUser === 'partner' && selectedUserId === partner.id
-                                    ? 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-800 cursor-pointer'
-                                    : 'bg-gray-50 text-gray-400 cursor-default'
-                              }
-                              ${isLoading ? 'opacity-50' : ''}
-                            `}
-                          >
-                            {isLoading ? (
-                              <div className="flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
-                              </div>
-                            ) : status.type === 'booked' ? (
-                              <div className="text-center">
-                                <div>已预约</div>
-                                <div className="text-xs">
-                                  {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
+                          {status.type === 'booked' && (
+                            (currentRole === 'partner' && selectedUserId === partner.id) ||
+                            (currentRole === 'entrepreneur' && selectedUserId === status.appointment?.entrepreneurId)
+                          ) ? (
+                            // When booked and user can cancel, use div container to avoid nested buttons
+                            <div
+                              className={`
+                                w-full px-3 py-2 rounded text-sm font-medium transition-colors relative
+                                bg-blue-100 text-blue-800 cursor-default
+                                ${isLoading ? 'opacity-50' : ''}
+                              `}
+                            >
+                              {isLoading ? (
+                                <div className="flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
                                 </div>
-                                {(currentUser === 'partner' && selectedUserId === partner.id) ||
-                                 (currentUser === 'entrepreneur' && selectedUserId === status.appointment?.entrepreneurId) ? (
+                              ) : (
+                                <div className="text-center">
+                                  <div>已预约</div>
+                                  <div className="text-xs">
+                                    {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
+                                  </div>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -369,24 +355,63 @@ export default function AppointmentSystem() {
                                       '取消'
                                     )}
                                   </button>
-                                ) : null}
-                              </div>
-                            ) : status.type === 'available' ? (
-                              <div className="text-center">
-                                空闲
-                                {!canAct && currentUser === 'entrepreneur' && (
-                                  <div className="text-xs mt-1">
-                                    {appointments.some(a => a.entrepreneurId === selectedUserId && a.startTime === time)
-                                      ? '时间冲突'
-                                      : '今日已约'
-                                    }
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            // For all other cases, use button
+                            <button
+                              onClick={() => {
+                                if (currentRole === 'partner') {
+                                  toggleAvailableSlot(partner.id, time)
+                                } else if (status.type === 'available' && canAct) {
+                                  bookAppointment(partner.id, time)
+                                }
+                              }}
+                              disabled={(!canAct && currentRole === 'entrepreneur') || isLoading}
+                              className={`
+                                w-full px-3 py-2 rounded text-sm font-medium transition-colors relative
+                                ${status.type === 'booked' 
+                                  ? 'bg-blue-100 text-blue-800 cursor-default' 
+                                  : status.type === 'available'
+                                    ? canAct 
+                                      ? 'bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer'
+                                      : 'bg-green-50 text-green-600 cursor-not-allowed'
+                                    : currentRole === 'partner' && selectedUserId === partner.id
+                                      ? 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-800 cursor-pointer'
+                                      : 'bg-gray-50 text-gray-400 cursor-default'
+                                }
+                                ${isLoading ? 'opacity-50' : ''}
+                              `}
+                            >
+                              {isLoading ? (
+                                <div className="flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                                </div>
+                              ) : status.type === 'booked' ? (
+                                <div className="text-center">
+                                  <div>已预约</div>
+                                  <div className="text-xs">
+                                    {entrepreneurs.find(e => e.id === status.appointment?.entrepreneurId)?.name}
                                   </div>
-                                )}
-                              </div>
-                            ) : (
-                              '不可用'
-                            )}
-                          </button>
+                                </div>
+                              ) : status.type === 'available' ? (
+                                <div className="text-center">
+                                  空闲
+                                  {!canAct && currentRole === 'entrepreneur' && (
+                                    <div className="text-xs mt-1">
+                                      {appointments.some(a => a.entrepreneurId === selectedUserId && a.startTime === time)
+                                        ? '时间冲突'
+                                        : '今日已约'
+                                      }
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                '不可用'
+                              )}
+                            </button>
+                          )}
                         </td>
                       )
                     })}
